@@ -10,11 +10,18 @@ export default function AIPage() {
   const remoteAudioRef = useRef(null);
 
   async function startAI() {
+    if (started) return;
+
     try {
+      setStarted(true);
       setStatus("マイク許可待ち");
 
       const micStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
         video: false
       });
 
@@ -22,7 +29,9 @@ export default function AIPage() {
 
       const cameraStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: true
+        video: {
+          facingMode: { ideal: "environment" }
+        }
       });
 
       if (localVideoRef.current) {
@@ -50,33 +59,42 @@ export default function AIPage() {
       const dc = pc.createDataChannel("oai-events");
 
       dc.onopen = () => {
-        if (!started) {
-          setStarted(true);
-
-          dc.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [
-                {
-                  type: "input_text",
-                  text: "こんにちは😊 なにかお困りですか？ そのまま話してください♪ この挨拶は1回だけ行い、その後は無音時に話しかけず待機してください。"
-                }
-              ]
+        dc.send(JSON.stringify({
+          type: "session.update",
+          session: {
+            turn_detection: {
+              type: "server_vad",
+              threshold: 0.9,
+              prefix_padding_ms: 300,
+              silence_duration_ms: 1500,
+              create_response: true,
+              interrupt_response: true
             }
-          }));
+          }
+        }));
 
-          dc.send(JSON.stringify({
-            type: "response.create"
-          }));
-        }
+        dc.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "こんにちは😊 なにかお困りですか？ そのまま話してください♪ この挨拶は1回だけ行い、その後は無音時・雑音・物音・周囲の音には反応せず、お客様の明確な発話があるまで待機してください。"
+              }
+            ]
+          }
+        }));
+
+        dc.send(JSON.stringify({
+          type: "response.create"
+        }));
 
         setStatus("接続完了");
       };
 
       const offer = await pc.createOffer();
-
       await pc.setLocalDescription(offer);
 
       const response = await fetch("/api/realtime-call", {
@@ -96,6 +114,7 @@ export default function AIPage() {
 
     } catch (error) {
       console.error(error);
+      setStarted(false);
       setStatus("許可または接続失敗");
     }
   }
@@ -124,7 +143,7 @@ export default function AIPage() {
           そのまま話してください♪
         </div>
 
-        <button className="callButton" onClick={startAI}>
+        <button className="callButton" onClick={startAI} disabled={started}>
           AIスタッフを呼ぶ
         </button>
 
