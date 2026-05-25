@@ -9,45 +9,55 @@ export default function AIPage() {
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
 
-  async function startAI() {
-    if (started) return;
-
+  async function getMediaStream() {
     try {
-      setStarted(true);
-      setStatus("マイク許可待ち");
-
-      const micStream = await navigator.mediaDevices.getUserMedia({
+      return await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true
         },
-        video: false
-      });
-
-      setStatus("カメラ許可待ち");
-
-      const cameraStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
         video: {
           facingMode: { ideal: "environment" }
         }
       });
+    } catch (error) {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: true
+      });
+    }
+  }
 
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = cameraStream;
+  async function startAI() {
+    if (started) return;
+
+    let mediaStream = null;
+
+    try {
+      setStarted(true);
+      setStatus("カメラ・マイク許可待ち");
+
+      mediaStream = await getMediaStream();
+
+      const audioTracks = mediaStream.getAudioTracks();
+      const videoTracks = mediaStream.getVideoTracks();
+
+      if (localVideoRef.current && videoTracks.length > 0) {
+        const cameraOnlyStream = new MediaStream(videoTracks);
+        localVideoRef.current.srcObject = cameraOnlyStream;
       }
 
       setStatus("AI接続中");
 
-      const stream = new MediaStream([
-        ...micStream.getAudioTracks()
-      ]);
-
       const pc = new RTCPeerConnection();
 
-      stream.getAudioTracks().forEach((track) => {
-        pc.addTrack(track, stream);
+      audioTracks.forEach((track) => {
+        pc.addTrack(track, mediaStream);
       });
 
       pc.ontrack = (event) => {
@@ -105,15 +115,23 @@ export default function AIPage() {
         body: offer.sdp
       });
 
+      if (!response.ok) {
+        throw new Error("Realtime API connection failed");
+      }
+
       const answer = await response.text();
 
       await pc.setRemoteDescription({
         type: "answer",
         sdp: answer
       });
-
     } catch (error) {
       console.error(error);
+
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+      }
+
       setStarted(false);
       setStatus("許可または接続失敗");
     }
@@ -147,9 +165,7 @@ export default function AIPage() {
           AIスタッフを呼ぶ
         </button>
 
-        <div className="status">
-          {status}
-        </div>
+        <div className="status">{status}</div>
       </div>
 
       <video
