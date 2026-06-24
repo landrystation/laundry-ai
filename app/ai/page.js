@@ -9,27 +9,101 @@ export default function AIPage() {
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
 
-  async function getMediaStream() {
+  function isBackCameraLabel(label) {
+    const text = label.toLowerCase();
+
+    return (
+      text.includes("back") ||
+      text.includes("rear") ||
+      text.includes("environment") ||
+      text.includes("facing back") ||
+      text.includes("背面") ||
+      text.includes("アウト")
+    );
+  }
+
+  function isFrontCameraLabel(label) {
+    const text = label.toLowerCase();
+
+    return (
+      text.includes("front") ||
+      text.includes("user") ||
+      text.includes("facing front") ||
+      text.includes("前面") ||
+      text.includes("イン")
+    );
+  }
+
+  async function getBestMediaStream() {
+    setStatus("カメラ・マイク許可待ち");
+
+    const baseStream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true
+      },
+      video: {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    });
+
+    let selectedStream = baseStream;
+
     try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: {
-          facingMode: { ideal: "environment" }
-        }
-      });
-    } catch (error) {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: true
-      });
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter((device) => device.kind === "videoinput");
+
+      const backCamera =
+        videoDevices.find((device) => isBackCameraLabel(device.label)) ||
+        videoDevices.find((device) => !isFrontCameraLabel(device.label));
+
+      const currentVideoTrack = baseStream.getVideoTracks()[0];
+      const currentLabel = currentVideoTrack?.label || "";
+
+      if (
+        backCamera?.deviceId &&
+        currentLabel &&
+        !isBackCameraLabel(currentLabel) &&
+        videoDevices.length > 1
+      ) {
+        const backVideoStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            deviceId: { exact: backCamera.deviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+
+        baseStream.getVideoTracks().forEach((track) => track.stop());
+
+        selectedStream = new MediaStream([
+          ...baseStream.getAudioTracks(),
+          ...backVideoStream.getVideoTracks()
+        ]);
+      }
+    } catch (cameraSelectError) {
+      console.warn("Back camera selection fallback:", cameraSelectError);
+    }
+
+    return selectedStream;
+  }
+
+  async function attachLocalCamera(mediaStream) {
+    const videoTracks = mediaStream.getVideoTracks();
+
+    if (localVideoRef.current && videoTracks.length > 0) {
+      const cameraOnlyStream = new MediaStream(videoTracks);
+      localVideoRef.current.srcObject = cameraOnlyStream;
+
+      try {
+        await localVideoRef.current.play();
+      } catch (playError) {
+        console.warn("Video play fallback:", playError);
+      }
     }
   }
 
@@ -40,19 +114,19 @@ export default function AIPage() {
 
     try {
       setStarted(true);
-      setStatus("カメラ・マイク許可待ち");
 
-      mediaStream = await getMediaStream();
+      mediaStream = await getBestMediaStream();
+      await attachLocalCamera(mediaStream);
 
-      const audioTracks = mediaStream.getAudioTracks();
-      const videoTracks = mediaStream.getVideoTracks();
+      const videoLabel = mediaStream.getVideoTracks()[0]?.label || "";
 
-      if (localVideoRef.current && videoTracks.length > 0) {
-        const cameraOnlyStream = new MediaStream(videoTracks);
-        localVideoRef.current.srcObject = cameraOnlyStream;
+      if (videoLabel && isBackCameraLabel(videoLabel)) {
+        setStatus("背面カメラでAI接続中");
+      } else {
+        setStatus("AI接続中");
       }
 
-      setStatus("AI接続中");
+      const audioTracks = mediaStream.getAudioTracks();
 
       const pc = new RTCPeerConnection();
 
