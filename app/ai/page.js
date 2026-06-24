@@ -5,9 +5,11 @@ import { useRef, useState } from "react";
 export default function AIPage() {
   const [status, setStatus] = useState("待機中");
   const [started, setStarted] = useState(false);
+  const [capturedImage, setCapturedImage] = useState(null);
 
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const canvasRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const mediaStreamRef = useRef(null);
 
@@ -334,9 +336,45 @@ export default function AIPage() {
     }
   }
 
+  function capturePhoto() {
+    const video = localVideoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
+      setStatus("カメラ映像がまだ準備できていません");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext("2d");
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    const imageDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+    setCapturedImage(imageDataUrl);
+    setStatus("写真を撮影しました");
+  }
+
+  function retakePhoto() {
+    setCapturedImage(null);
+    setStatus("撮り直しできます");
+  }
+
+  function sendPhotoPlaceholder() {
+    if (!capturedImage) {
+      setStatus("送信する写真がありません");
+      return;
+    }
+
+    setStatus("写真送信は次のVision実装で接続します");
+  }
+
   return (
     <main className="screen">
       <audio autoPlay playsInline ref={remoteAudioRef} />
+      <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <div className="centerArea">
         <div className="avatar">
@@ -365,13 +403,39 @@ export default function AIPage() {
         <div className="status">{status}</div>
       </div>
 
-      <video
-        ref={localVideoRef}
-        autoPlay
-        muted
-        playsInline
-        className="camera"
-      />
+      <div className="cameraArea">
+        <video
+          ref={localVideoRef}
+          autoPlay
+          muted
+          playsInline
+          className="camera"
+        />
+
+        <button className="shutterButton" onClick={capturePhoto}>
+          写真を撮る
+        </button>
+
+        {capturedImage && (
+          <div className="photoPreviewArea">
+            <img
+              src={capturedImage}
+              alt="撮影した写真"
+              className="photoPreview"
+            />
+
+            <div className="photoButtons">
+              <button className="retakeButton" onClick={retakePhoto}>
+                撮り直す
+              </button>
+
+              <button className="sendPhotoButton" onClick={sendPhotoPlaceholder}>
+                写真を送る
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   );
 }
