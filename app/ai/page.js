@@ -8,9 +8,11 @@ export default function AIPage() {
 
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
+  const peerConnectionRef = useRef(null);
+  const mediaStreamRef = useRef(null);
 
   function isBackCameraLabel(label) {
-    const text = label.toLowerCase();
+    const text = String(label || "").toLowerCase();
 
     return (
       text.includes("back") ||
@@ -23,7 +25,7 @@ export default function AIPage() {
   }
 
   function isFrontCameraLabel(label) {
-    const text = label.toLowerCase();
+    const text = String(label || "").toLowerCase();
 
     return (
       text.includes("front") ||
@@ -34,148 +36,272 @@ export default function AIPage() {
     );
   }
 
-  async function getBestMediaStream() {
-    setStatus("カメラ・マイク許可待ち");
+  function stopAll() {
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+    }
 
-    const baseStream = await navigator.mediaDevices.getUserMedia({
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = null;
+    }
+
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
+  }
+
+  function getErrorMessage(error) {
+    if (!error) return "不明なエラー";
+
+    if (error.name === "NotAllowedError") {
+      return "マイクまたはカメラの許可が必要です";
+    }
+
+    if (error.name === "NotFoundError") {
+      return "マイクまたはカメラが見つかりません";
+    }
+
+    if (error.name === "NotReadableError") {
+      return "マイクまたはカメラを他のアプリが使用中です";
+    }
+
+    if (error.name === "OverconstrainedError") {
+      return "カメラ条件が合いません";
+    }
+
+    if (error.message) return error.message;
+
+    return "接続に失敗しました";
+  }
+
+  async function getAudioStream() {
+    setStatus("マイク許可待ち");
+
+    return await navigator.mediaDevices.getUserMedia({
       audio: {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true
       },
-      video: {
-        facingMode: { ideal: "environment" },
-        width: { ideal: 1280 },
-        height: { ideal: 720 }
-      }
+      video: false
     });
+  }
 
-    let selectedStream = baseStream;
+  async function getCameraStream() {
+    setStatus("カメラ許可待ち");
 
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+    } catch (firstCameraError) {
+      console.warn("Environment camera fallback:", firstCameraError);
+
+      return await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: true
+      });
+    }
+  }
+
+  async function selectBackCameraIfPossible(currentCameraStream) {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((device) => device.kind === "videoinput");
+
+      if (videoDevices.length <= 1) {
+        return currentCameraStream;
+      }
+
+      const currentTrack = currentCameraStream.getVideoTracks()[0];
+      const currentLabel = currentTrack?.label || "";
+
+      if (currentLabel && isBackCameraLabel(currentLabel)) {
+        return currentCameraStream;
+      }
 
       const backCamera =
         videoDevices.find((device) => isBackCameraLabel(device.label)) ||
         videoDevices.find((device) => !isFrontCameraLabel(device.label));
 
-      const currentVideoTrack = baseStream.getVideoTracks()[0];
-      const currentLabel = currentVideoTrack?.label || "";
-
-      if (
-        backCamera?.deviceId &&
-        currentLabel &&
-        !isBackCameraLabel(currentLabel) &&
-        videoDevices.length > 1
-      ) {
-        const backVideoStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: {
-            deviceId: { exact: backCamera.deviceId },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-
-        baseStream.getVideoTracks().forEach((track) => track.stop());
-
-        selectedStream = new MediaStream([
-          ...baseStream.getAudioTracks(),
-          ...backVideoStream.getVideoTracks()
-        ]);
+      if (!backCamera?.deviceId) {
+        return currentCameraStream;
       }
-    } catch (cameraSelectError) {
-      console.warn("Back camera selection fallback:", cameraSelectError);
-    }
 
-    return selectedStream;
+      const backCameraStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          deviceId: { ideal: backCamera.deviceId },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        }
+      });
+
+      currentCameraStream.getTracks().forEach((track) => track.stop());
+
+      return backCameraStream;
+    } catch (error) {
+      console.warn("Back camera selection skipped:", error);
+      return currentCameraStream;
+    }
   }
 
-  async function attachLocalCamera(mediaStream) {
-    const videoTracks = mediaStream.getVideoTracks();
+  async function attachLocalCamera(cameraStream) {
+    if (!localVideoRef.current || !cameraStream) return;
 
-    if (localVideoRef.current && videoTracks.length > 0) {
-      const cameraOnlyStream = new MediaStream(videoTracks);
-      localVideoRef.current.srcObject = cameraOnlyStream;
+    const videoTracks = cameraStream.getVideoTracks();
 
-      try {
-        await localVideoRef.current.play();
-      } catch (playError) {
-        console.warn("Video play fallback:", playError);
-      }
+    if (videoTracks.length === 0) return;
+
+    localVideoRef.current.srcObject = new MediaStream(videoTracks);
+
+    try {
+      await localVideoRef.current.play();
+    } catch (error) {
+      console.warn("Local camera preview play skipped:", error);
     }
   }
 
   async function startAI() {
     if (started) return;
 
-    let mediaStream = null;
+    setStarted(true);
+    stopAll();
+
+    let audioStream = null;
+    let cameraStream = null;
 
     try {
-      setStarted(true);
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error("このブラウザはマイク・カメラに対応していません");
+      }
 
-      mediaStream = await getBestMediaStream();
-      await attachLocalCamera(mediaStream);
+      audioStream = await getAudioStream();
 
-      const videoLabel = mediaStream.getVideoTracks()[0]?.label || "";
+      try {
+        cameraStream = await getCameraStream();
+        cameraStream = await selectBackCameraIfPossible(cameraStream);
+        await attachLocalCamera(cameraStream);
+      } catch (cameraError) {
+        console.warn("Camera unavailable. Continue with audio only:", cameraError);
+        setStatus("カメラなしでAI接続中");
+      }
+
+      const combinedStream = new MediaStream([
+        ...audioStream.getAudioTracks(),
+        ...(cameraStream ? cameraStream.getVideoTracks() : [])
+      ]);
+
+      mediaStreamRef.current = combinedStream;
+
+      const audioTracks = combinedStream.getAudioTracks();
+
+      if (audioTracks.length === 0) {
+        throw new Error("マイクを取得できませんでした");
+      }
+
+      const videoLabel = combinedStream.getVideoTracks()[0]?.label || "";
 
       if (videoLabel && isBackCameraLabel(videoLabel)) {
         setStatus("背面カメラでAI接続中");
+      } else if (combinedStream.getVideoTracks().length > 0) {
+        setStatus("カメラ付きでAI接続中");
       } else {
-        setStatus("AI接続中");
+        setStatus("音声のみでAI接続中");
       }
 
-      const audioTracks = mediaStream.getAudioTracks();
-
       const pc = new RTCPeerConnection();
+      peerConnectionRef.current = pc;
 
       audioTracks.forEach((track) => {
-        pc.addTrack(track, mediaStream);
+        pc.addTrack(track, combinedStream);
       });
 
-      pc.ontrack = (event) => {
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = event.streams[0];
+      pc.ontrack = async (event) => {
+        if (!remoteAudioRef.current) return;
+
+        remoteAudioRef.current.srcObject = event.streams[0];
+
+        try {
+          await remoteAudioRef.current.play();
+        } catch (error) {
+          console.warn("Remote audio play skipped:", error);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          setStatus("接続完了");
+        }
+
+        if (
+          pc.connectionState === "failed" ||
+          pc.connectionState === "disconnected" ||
+          pc.connectionState === "closed"
+        ) {
+          setStatus(`接続状態: ${pc.connectionState}`);
         }
       };
 
       const dc = pc.createDataChannel("oai-events");
 
       dc.onopen = () => {
-        dc.send(JSON.stringify({
-          type: "session.update",
-          session: {
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.9,
-              prefix_padding_ms: 300,
-              silence_duration_ms: 1500,
-              create_response: true,
-              interrupt_response: true
-            }
-          }
-        }));
-
-        dc.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text: "こんにちは😊 なにかお困りですか？ そのまま話してください♪ この挨拶は1回だけ行い、その後は無音時・雑音・物音・周囲の音には反応せず、お客様の明確な発話があるまで待機してください。"
+        dc.send(
+          JSON.stringify({
+            type: "session.update",
+            session: {
+              turn_detection: {
+                type: "server_vad",
+                threshold: 0.9,
+                prefix_padding_ms: 300,
+                silence_duration_ms: 1500,
+                create_response: true,
+                interrupt_response: true
               }
-            ]
-          }
-        }));
+            }
+          })
+        );
 
-        dc.send(JSON.stringify({
-          type: "response.create"
-        }));
+        dc.send(
+          JSON.stringify({
+            type: "conversation.item.create",
+            item: {
+              type: "message",
+              role: "user",
+              content: [
+                {
+                  type: "input_text",
+                  text:
+                    "こんにちは😊 なにかお困りですか？ そのまま話してください♪ この挨拶は1回だけ行い、その後は無音時・雑音・物音・周囲の音には反応せず、お客様の明確な発話があるまで待機してください。"
+                }
+              ]
+            }
+          })
+        );
+
+        dc.send(
+          JSON.stringify({
+            type: "response.create"
+          })
+        );
 
         setStatus("接続完了");
+      };
+
+      dc.onerror = (error) => {
+        console.error("Data channel error:", error);
+        setStatus("会話チャンネル失敗");
       };
 
       const offer = await pc.createOffer();
@@ -190,7 +316,7 @@ export default function AIPage() {
       });
 
       if (!response.ok) {
-        throw new Error("Realtime API connection failed");
+        throw new Error("Realtime API接続に失敗しました");
       }
 
       const answer = await response.text();
@@ -202,12 +328,9 @@ export default function AIPage() {
     } catch (error) {
       console.error(error);
 
-      if (mediaStream) {
-        mediaStream.getTracks().forEach((track) => track.stop());
-      }
-
+      stopAll();
       setStarted(false);
-      setStatus("許可または接続失敗");
+      setStatus(`失敗: ${getErrorMessage(error)}`);
     }
   }
 
