@@ -6,22 +6,35 @@ export default function AIPage() {
   const [status, setStatus] = useState("待機中");
   const [started, setStarted] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
-  const [visionResult, setVisionResult] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
   const canvasRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const mediaStreamRef = useRef(null);
+  const dataChannelRef = useRef(null);
 
   function isBackCameraLabel(label) {
     const text = String(label || "").toLowerCase();
-    return text.includes("back") || text.includes("rear") || text.includes("environment") || text.includes("facing back") || text.includes("背面") || text.includes("アウト");
+    return (
+      text.includes("back") ||
+      text.includes("rear") ||
+      text.includes("environment") ||
+      text.includes("facing back") ||
+      text.includes("背面") ||
+      text.includes("アウト")
+    );
   }
 
   function isFrontCameraLabel(label) {
     const text = String(label || "").toLowerCase();
-    return text.includes("front") || text.includes("user") || text.includes("facing front") || text.includes("前面") || text.includes("イン");
+    return (
+      text.includes("front") ||
+      text.includes("user") ||
+      text.includes("facing front") ||
+      text.includes("前面") ||
+      text.includes("イン")
+    );
   }
 
   function stopAll() {
@@ -34,6 +47,8 @@ export default function AIPage() {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
+
+    dataChannelRef.current = null;
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
@@ -210,6 +225,7 @@ export default function AIPage() {
       };
 
       const dc = pc.createDataChannel("oai-events");
+      dataChannelRef.current = dc;
 
       dc.onopen = () => {
         dc.send(JSON.stringify({
@@ -293,13 +309,11 @@ export default function AIPage() {
     const imageDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
     setCapturedImage(imageDataUrl);
-    setVisionResult("");
     setStatus("写真を確認してください");
   }
 
   function retakePhoto() {
     setCapturedImage(null);
-    setVisionResult("");
     setStatus("もう一度撮影できます");
   }
 
@@ -311,7 +325,6 @@ export default function AIPage() {
 
     try {
       setStatus("写真を解析中です");
-      setVisionResult("");
 
       const response = await fetch("/api/vision", {
         method: "POST",
@@ -329,8 +342,32 @@ export default function AIPage() {
         throw new Error(data?.error || "画像解析に失敗しました");
       }
 
-      setVisionResult(data?.result || "画像を確認しました");
+      const result = data?.result || "写真を確認しました。";
+
       setStatus("写真を確認しました");
+
+      const dc = dataChannelRef.current;
+
+      if (dc && dc.readyState === "open") {
+        dc.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text:
+                  "お客様が写真を送信しました。以下は写真解析結果です。この内容をもとに、西本町店の現場スタッフとして、お客様に短く優しく案内してください。断定しすぎず、見えている範囲で答えてください。写真解析結果：" + result
+              }
+            ]
+          }
+        }));
+
+        dc.send(JSON.stringify({ type: "response.create" }));
+      } else {
+        setStatus("写真を確認しました。AI接続後に案内できます");
+      }
     } catch (error) {
       console.error(error);
       setStatus(`画像解析失敗: ${error.message || "不明なエラー"}`);
@@ -367,12 +404,6 @@ export default function AIPage() {
         </button>
 
         <div className="status">{status}</div>
-
-        {visionResult && (
-          <div className="visionResult">
-            {visionResult}
-          </div>
-        )}
       </div>
 
       <div className="cameraArea">
