@@ -14,10 +14,10 @@ body {
   width: 100vw;
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 24px 16px 260px;
+  padding: 24px 16px 420px;
   display: flex;
   justify-content: center;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .centerArea {
@@ -116,6 +116,22 @@ body {
   text-align: center;
 }
 
+.visionResult {
+  width: min(86vw, 360px);
+  box-sizing: border-box;
+  background: white;
+  border-radius: 20px;
+  padding: 18px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: #333;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  margin-bottom: 30px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+
 .cameraArea {
   position: fixed;
   left: 50%;
@@ -164,7 +180,7 @@ body {
 
 .photoPreview {
   width: 100%;
-  max-height: 190px;
+  max-height: 220px;
   object-fit: cover;
   border-radius: 14px;
   display: block;
@@ -201,7 +217,7 @@ body {
   .screen {
     align-items: flex-start;
     padding-top: 18px;
-    padding-bottom: 245px;
+    padding-bottom: 420px;
   }
 
   .centerArea {
@@ -246,6 +262,6 @@ body {
   }
 
   .photoPreview {
-    max-height: 150px;
+    max-height: 170px;
   }
 }
