@@ -112,16 +112,13 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       mediaStreamRef.current.getTracks().forEach((track) => track.stop());
       mediaStreamRef.current = null;
     }
-
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
     }
-
     dataChannelRef.current = null;
     greetingDoneRef.current = false;
     lastTranscriptRef.current = "";
-
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
   }
@@ -139,7 +136,6 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
   function sendOpenAIGreeting(dc) {
     if (greetingDoneRef.current) return;
     greetingDoneRef.current = true;
-
     if (!dc || dc.readyState !== "open") return;
 
     dc.send(JSON.stringify({
@@ -147,12 +143,7 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       item: {
         type: "message",
         role: "user",
-        content: [
-          {
-            type: "input_text",
-            text: "次のセリフをそのまま読んでください。一言も変えないでください。「AIスタッフです。ご用件をお伺いします。」"
-          }
-        ]
+        content: [{ type: "input_text", text: "次のセリフをそのまま読んでください。一言も変えないでください。「AIスタッフです。ご用件をお伺いします。」" }]
       }
     }));
 
@@ -167,18 +158,12 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
 
   function handleRealtimeEvent(event) {
     let data = null;
-
-    try {
-      data = JSON.parse(event.data);
-    } catch {
-      return;
-    }
+    try { data = JSON.parse(event.data); } catch { return; }
 
     if (data?.type === "response.audio.delta") {
       setStatus("返答中");
       setIsSpeaking(true);
     }
-
     if (data?.type === "response.done") {
       setStatus("接続完了");
       setIsSpeaking(false);
@@ -187,35 +172,22 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
 
   async function getAudioStream() {
     setStatus("マイク許可待ち");
-
     return await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      },
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       video: false
     });
   }
 
   async function getCameraStream() {
     setStatus("カメラ許可待ち");
-
     try {
       return await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
     } catch (firstCameraError) {
       console.warn("Environment camera fallback:", firstCameraError);
-      return await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: true
-      });
+      return await navigator.mediaDevices.getUserMedia({ audio: false, video: true });
     }
   }
 
@@ -223,29 +195,18 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter((device) => device.kind === "videoinput");
-
       if (videoDevices.length <= 1) return currentCameraStream;
-
       const currentTrack = currentCameraStream.getVideoTracks()[0];
       const currentLabel = currentTrack?.label || "";
-
       if (currentLabel && isBackCameraLabel(currentLabel)) return currentCameraStream;
-
       const backCamera =
         videoDevices.find((device) => isBackCameraLabel(device.label)) ||
         videoDevices.find((device) => !isFrontCameraLabel(device.label));
-
       if (!backCamera?.deviceId) return currentCameraStream;
-
       const backCameraStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: {
-          deviceId: { ideal: backCamera.deviceId },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        }
+        video: { deviceId: { ideal: backCamera.deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
       });
-
       currentCameraStream.getTracks().forEach((track) => track.stop());
       return backCameraStream;
     } catch (error) {
@@ -256,22 +217,14 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
 
   async function attachLocalCamera(cameraStream) {
     if (!localVideoRef.current || !cameraStream) return;
-
     const videoTracks = cameraStream.getVideoTracks();
     if (videoTracks.length === 0) return;
-
     localVideoRef.current.srcObject = new MediaStream(videoTracks);
-
-    try {
-      await localVideoRef.current.play();
-    } catch (error) {
-      console.warn("Local camera preview play skipped:", error);
-    }
+    try { await localVideoRef.current.play(); } catch (error) { console.warn("Local camera preview play skipped:", error); }
   }
 
   async function startAI() {
     if (started) return;
-
     setStarted(true);
     stopAll();
 
@@ -279,9 +232,7 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
     let cameraStream = null;
 
     try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error("このブラウザはマイク・カメラに対応していません");
-      }
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("このブラウザはマイク・カメラに対応していません");
 
       audioStream = await getAudioStream();
 
@@ -300,49 +251,27 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       ]);
 
       mediaStreamRef.current = combinedStream;
-
       const audioTracks = combinedStream.getAudioTracks();
       if (audioTracks.length === 0) throw new Error("マイクを取得できませんでした");
 
       const videoLabel = combinedStream.getVideoTracks()[0]?.label || "";
-
-      if (videoLabel && isBackCameraLabel(videoLabel)) {
-        setStatus("背面カメラでAI接続中");
-      } else if (combinedStream.getVideoTracks().length > 0) {
-        setStatus("カメラ付きでAI接続中");
-      } else {
-        setStatus("音声のみでAI接続中");
-      }
+      if (videoLabel && isBackCameraLabel(videoLabel)) setStatus("背面カメラでAI接続中");
+      else if (combinedStream.getVideoTracks().length > 0) setStatus("カメラ付きでAI接続中");
+      else setStatus("音声のみでAI接続中");
 
       const pc = new RTCPeerConnection();
       peerConnectionRef.current = pc;
-
-      audioTracks.forEach((track) => {
-        pc.addTrack(track, combinedStream);
-      });
+      audioTracks.forEach((track) => pc.addTrack(track, combinedStream));
 
       pc.ontrack = async (event) => {
         if (!remoteAudioRef.current) return;
-
         remoteAudioRef.current.srcObject = event.streams[0];
-
-        try {
-          await remoteAudioRef.current.play();
-        } catch (error) {
-          console.warn("Remote audio play skipped:", error);
-        }
+        try { await remoteAudioRef.current.play(); } catch (error) { console.warn("Remote audio play skipped:", error); }
       };
 
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === "connected") setStatus("接続完了");
-
-        if (
-          pc.connectionState === "failed" ||
-          pc.connectionState === "disconnected" ||
-          pc.connectionState === "closed"
-        ) {
-          setStatus(`接続状態: ${pc.connectionState}`);
-        }
+        if (["failed", "disconnected", "closed"].includes(pc.connectionState)) setStatus(`接続状態: ${pc.connectionState}`);
       };
 
       const dc = pc.createDataChannel("oai-events");
@@ -360,9 +289,7 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
             output_modalities: ["audio"],
             audio: {
               input: {
-                transcription: {
-                  model: "whisper-1"
-                },
+                transcription: { model: "whisper-1" },
                 turn_detection: {
                   type: "server_vad",
                   threshold: 0.98,
@@ -372,9 +299,7 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
                   interrupt_response: true
                 }
               },
-              output: {
-                voice: "coral"
-              }
+              output: { voice: "coral" }
             }
           }
         }));
@@ -400,13 +325,9 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       });
 
       if (!response.ok) throw new Error("Realtime API接続に失敗しました");
-
       const answer = await response.text();
+      await pc.setRemoteDescription({ type: "answer", sdp: answer });
 
-      await pc.setRemoteDescription({
-        type: "answer",
-        sdp: answer
-      });
     } catch (error) {
       console.error(error);
       stopAll();
@@ -418,20 +339,15 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
   function capturePhoto() {
     const video = localVideoRef.current;
     const canvas = canvasRef.current;
-
     if (!video || !canvas || !video.videoWidth || !video.videoHeight) {
       setStatus("カメラ映像がまだ準備できていません");
       return;
     }
-
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-
     const context = canvas.getContext("2d");
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
-
     const imageDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
     setCapturedImage(imageDataUrl);
     setStatus("写真を確認してください");
   }
@@ -442,58 +358,31 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
   }
 
   async function sendPhotoToVision() {
-    if (!capturedImage) {
-      setStatus("送信する写真がありません");
-      return;
-    }
-
+    if (!capturedImage) { setStatus("送信する写真がありません"); return; }
     try {
       setStatus("写真を解析中です");
-
       const response = await fetch("/api/vision", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          image: capturedImage
-        })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: capturedImage })
       });
-
       const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "画像解析に失敗しました");
-      }
-
+      if (!response.ok) throw new Error(data?.error || "画像解析に失敗しました");
       const result = data?.result || "写真を確認しました。";
-
       setStatus("写真を確認しました");
-
       const dc = dataChannelRef.current;
-
       if (dc && dc.readyState === "open") {
         dc.send(JSON.stringify({
           type: "conversation.item.create",
           item: {
             type: "message",
             role: "user",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "お客様が写真を送信しました。以下は写真解析結果です。西本町店の現場スタッフとして、見えている事実、考えられる可能性、次に確認したいことを短く案内してください。買い替え、修理、交換は勝手に勧めないでください。ランドリー機器と関係ない写真なら、何を確認したいか質問してください。写真解析結果：" + result
-              }
-            ]
+            content: [{ type: "input_text", text: "お客様が写真を送信しました。以下は写真解析結果です。西本町店の現場スタッフとして、見えている事実、考えられる可能性、次に確認したいことを短く案内してください。買い替え、修理、交換は勝手に勧めないでください。ランドリー機器と関係ない写真なら、何を確認したいか質問してください。写真解析結果：" + result }]
           }
         }));
-
         dc.send(JSON.stringify({
           type: "response.create",
-          response: {
-            output_modalities: ["audio"],
-            instructions: "必ず日本語で話してください。3文以内で短く案内してください。"
-          }
+          response: { output_modalities: ["audio"], instructions: "必ず日本語で話してください。3文以内で短く案内してください。" }
         }));
       } else {
         setStatus("写真を確認しました。AI接続後に案内できます");
@@ -510,7 +399,6 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <div className="centerArea">
-        {/* Live2D iframe */}
         <iframe
           src="/live2d"
           style={{
@@ -541,36 +429,16 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       <div className="cameraArea">
         {!capturedImage && (
           <>
-            <video
-              ref={localVideoRef}
-              autoPlay
-              muted
-              playsInline
-              className="camera"
-            />
-
-            <button className="shutterButton" onClick={capturePhoto}>
-              写真を撮る
-            </button>
+            <video ref={localVideoRef} autoPlay muted playsInline className="camera" />
+            <button className="shutterButton" onClick={capturePhoto}>写真を撮る</button>
           </>
         )}
-
         {capturedImage && (
           <div className="photoPreviewArea">
-            <img
-              src={capturedImage}
-              alt="撮影した写真"
-              className="photoPreview"
-            />
-
+            <img src={capturedImage} alt="撮影した写真" className="photoPreview" />
             <div className="photoButtons">
-              <button className="retakeButton" onClick={retakePhoto}>
-                撮り直す
-              </button>
-
-              <button className="sendPhotoButton" onClick={sendPhotoToVision}>
-                写真を送る
-              </button>
+              <button className="retakeButton" onClick={retakePhoto}>撮り直す</button>
+              <button className="sendPhotoButton" onClick={sendPhotoToVision}>写真を送る</button>
             </div>
           </div>
         )}
