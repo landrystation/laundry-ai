@@ -7,8 +7,8 @@ export default function Live2DPage() {
     async function loadLive2D() {
       try {
         await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@7.3.2/dist/pixi.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism5.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js");
 
         const PIXI = window.PIXI;
 
