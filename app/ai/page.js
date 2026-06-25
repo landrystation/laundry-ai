@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState } from "react";
 
 export default function AIPage() {
   const [status, setStatus] = useState("待機中");
@@ -16,9 +16,6 @@ export default function AIPage() {
   const dataChannelRef = useRef(null);
   const greetingDoneRef = useRef(false);
   const lastTranscriptRef = useRef("");
-  const live2dAppRef = useRef(null);
-  const live2dModelRef = useRef(null);
-  const live2dCanvasRef = useRef(null);
 
   const STAFF_INSTRUCTIONS = `
 あなたはコインランドリー西本町店の現場スタッフです。
@@ -86,99 +83,6 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
 
 回答は原則3文以内。
 `;
-
-  // Live2D初期化
-  useEffect(() => {
-    let cancelled = false;
-
-    async function initLive2D() {
-      try {
-        // PIXIとLive2Dをダイナミックに読み込む
-        if (!window.PIXI) {
-          await loadScript("https://cdnjs.cloudflare.com/ajax/libs/pixi.js/6.5.10/browser/pixi.min.js");
-        }
-        if (!window.PIXI?.live2d) {
-          await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
-          await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js");
-        }
-
-        if (cancelled) return;
-
-        const canvas = live2dCanvasRef.current;
-        if (!canvas) return;
-
-        const app = new window.PIXI.Application({
-          view: canvas,
-          width: canvas.offsetWidth || 300,
-          height: canvas.offsetHeight || 400,
-          transparent: true,
-          backgroundAlpha: 0,
-        });
-
-        live2dAppRef.current = app;
-
-        const model = await window.PIXI.live2d.Live2DModel.from("/live2d/model.model3.json");
-
-        if (cancelled) return;
-
-        app.stage.addChild(model);
-
-        // キャンバスサイズに合わせてスケール調整
-        const scaleX = app.screen.width / model.width;
-        const scaleY = app.screen.height / model.height;
-        const scale = Math.min(scaleX, scaleY) * 0.9;
-
-        model.scale.set(scale);
-        model.x = app.screen.width / 2 - (model.width * scale) / 2;
-        model.y = app.screen.height / 2 - (model.height * scale) / 2;
-
-        live2dModelRef.current = model;
-
-      } catch (err) {
-        console.warn("Live2D初期化失敗:", err);
-      }
-    }
-
-    initLive2D();
-
-    return () => {
-      cancelled = true;
-      if (live2dAppRef.current) {
-        live2dAppRef.current.destroy(true);
-        live2dAppRef.current = null;
-      }
-    };
-  }, []);
-
-  // 話し中フラグでLive2Dの口を動かす
-  useEffect(() => {
-    const model = live2dModelRef.current;
-    if (!model) return;
-
-    try {
-      if (isSpeaking) {
-        model.internalModel?.coreModel?.setParameterValueById("ParamMouthOpen_Y", 1);
-      } else {
-        model.internalModel?.coreModel?.setParameterValueById("ParamMouthOpen_Y", 0);
-      }
-    } catch (e) {
-      // モデルによっては口パラメータがない場合もある
-    }
-  }, [isSpeaking]);
-
-  function loadScript(src) {
-    return new Promise((resolve, reject) => {
-      if (document.querySelector(`script[src="${src}"]`)) {
-        resolve();
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = src;
-      script.onload = resolve;
-      script.onerror = reject;
-      document.head.appendChild(script);
-    });
-  }
 
   function isBackCameraLabel(label) {
     const text = String(label || "").toLowerCase();
@@ -606,16 +510,19 @@ NHKのアナウンサーのような標準的な日本語の発音とイント�
       <canvas ref={canvasRef} style={{ display: "none" }} />
 
       <div className="centerArea">
-        {/* Live2Dキャンバス */}
-        <canvas
-          ref={live2dCanvasRef}
-          className="live2dCanvas"
+        {/* Live2D iframe */}
+        <iframe
+          src="/live2d"
           style={{
-            width: "300px",
-            height: "400px",
+            width: "280px",
+            height: "320px",
+            border: "none",
+            background: "transparent",
             display: "block",
             margin: "0 auto",
           }}
+          scrolling="no"
+          allow="autoplay"
         />
 
         <div className="message">
