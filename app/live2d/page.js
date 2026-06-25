@@ -4,17 +4,14 @@ import { useEffect } from "react";
 
 export default function Live2DPage() {
   useEffect(() => {
-    async function loadLive2D() {
+    async function init() {
       try {
+        const PIXI = await import("pixi.js");
+        const { Live2DModel } = await import("pixi-live2d-display/cubism4");
+
+        window.PIXI = PIXI;
+
         await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism4.min.js");
-
-        const PIXI = window.PIXI;
-
-        if (!PIXI?.live2d?.Live2DModel) {
-          throw new Error("Live2DModelが読み込まれていません");
-        }
 
         const app = new PIXI.Application({
           view: document.getElementById("live2d-canvas"),
@@ -23,7 +20,10 @@ export default function Live2DPage() {
           backgroundAlpha: 0,
         });
 
-        const model = await PIXI.live2d.Live2DModel.from("/live2d/model.model3.json");
+        const model = await Live2DModel.from("/live2d/model.model3.json", {
+          ticker: PIXI.Ticker.shared,
+        });
+
         app.stage.addChild(model);
 
         const scale = Math.min(280 / model.width, 320 / model.height) * 0.9;
@@ -38,7 +38,7 @@ export default function Live2DPage() {
       }
     }
 
-    loadLive2D();
+    init();
   }, []);
 
   return (
@@ -51,14 +51,11 @@ export default function Live2DPage() {
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve();
-      return;
-    }
+    if (document.querySelector(`script[src="${src}"]`)) { resolve(); return; }
     const script = document.createElement("script");
     script.src = src;
     script.onload = resolve;
-    script.onerror = () => reject(new Error("スクリプト読み込み失敗: " + src));
+    script.onerror = () => reject(new Error("読み込み失敗: " + src));
     document.head.appendChild(script);
   });
 }
