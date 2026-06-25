@@ -8,7 +8,7 @@ export default function Live2DPage() {
       try {
         await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.1/dist/cubism4.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display/dist/cubism4.min.js");
 
         const PIXI = window.PIXI;
 
@@ -24,7 +24,6 @@ export default function Live2DPage() {
         });
 
         const model = await PIXI.live2d.Live2DModel.from("/live2d/model.model3.json");
-
         app.stage.addChild(model);
 
         const scale = Math.min(280 / model.width, 320 / model.height) * 0.9;
