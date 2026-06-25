@@ -2,17 +2,27 @@ export async function POST(request) {
   try {
     const offerSdp = await request.text();
 
-    const response = await fetch(
-      "https://api.openai.com/v1/realtime/calls?model=gpt-realtime&voice=nova",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-          "Content-Type": "application/sdp",
+    const sessionConfig = JSON.stringify({
+      type: "realtime",
+      model: "gpt-realtime-2",
+      audio: {
+        output: {
+          voice: "shimmer",
         },
-        body: offerSdp,
-      }
-    );
+      },
+    });
+
+    const formData = new FormData();
+    formData.append("sdp", new Blob([offerSdp], { type: "application/sdp" }), "sdp");
+    formData.append("session", new Blob([sessionConfig], { type: "application/json" }), "session");
+
+    const response = await fetch("https://api.openai.com/v1/realtime/calls", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: formData,
+    });
 
     if (!response.ok) {
       const errorText = await response.text();
