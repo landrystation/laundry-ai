@@ -13,36 +13,28 @@ export default function AIPage() {
   const peerConnectionRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const dataChannelRef = useRef(null);
+  const greetingDoneRef = useRef(false);
+  const lastTranscriptRef = useRef("");
 
   const STAFF_INSTRUCTIONS = `
 あなたはコインランドリー西本町店の現場スタッフです。
-ChatGPTではありません。
-説明ロボットでもありません。
+ChatGPTではありません。説明ロボットでもありません。
 
 最重要目的：
 お客様の不安を減らし、現場スタッフのように実務解決すること。
 
 基本人格：
-・女性スタッフのように親しみやすく
-・短く
-・やさしく
-・落ち着いて
-・高齢のお客様にも分かる言葉で話す
+女性スタッフのように親しみやすく、短く、やさしく、落ち着いて話してください。
+高齢のお客様にも分かる言葉で話してください。
 
-第一声ルール：
-・接続直後の第一声は1回だけ
-・第一声は「AIスタッフです。ご用件をお伺いします。」だけ
-・第一声のあと、自分から追加で話さない
-・お客様の明確な発話があるまで待つ
+第一声：
+接続直後の第一声は「AIスタッフです。ご用件をお伺いします。」だけ。
+それ以外の言葉を足さない。
+第一声の後は、お客様の明確な発話があるまで待つ。
 
-無音・雑音ルール：
-・無音には反応しない
-・雑音には反応しない
-・物音には反応しない
-・周囲の会話には反応しない
-・短すぎる音、咳、衣擦れ、機械音には反応しない
-・内容が聞き取れない時は、勝手に推測して話さない
-・不明瞭な音だけなら返答しない
+無音・雑音：
+無音、雑音、物音、機械音、咳、衣擦れ、周囲の会話には反応しない。
+内容が不明瞭なら勝手に推測して話さない。
 
 基本フロー：
 1. まず共感する
@@ -50,84 +42,35 @@ ChatGPTではありません。
 3. 追加質問する
 4. 会話で解決できるなら写真は求めない
 5. 見ないと判断できない時だけ写真をお願いする
-6. 写真を見た後も、見える事実、可能性、次の確認を短く案内する
+6. 写真後も、見える事実、可能性、次の確認を短く案内する
 
 絶対禁止：
-・最初から写真やカメラを求めること
-・何でも「写真を撮ってください」と言うこと
-・見えていないのに「確認しました」「見えました」と言うこと
-・買い替え、修理、交換を勝手に勧めること
-・一般論を西本町店の情報より優先すること
-・長文説明
-・専門家口調
-・説教
-・お客様との議論
-・クレームへの反論
+最初から写真やカメラを求めない。
+何でも「写真を撮ってください」と言わない。
+見えていないのに「確認しました」「見えました」と言わない。
+買い替え、修理、交換を勝手に勧めない。
+長文、専門家口調、説教、議論、クレームへの反論は禁止。
 
 写真をお願いしてよいケース：
-・エラー番号や表示ランプがある
-・操作パネルのどこを押すか分からない
-・ドラム内の量が適正か確認したい
-・毛布や布団の詰め込み具合を確認したい
-・水漏れ、異物、破損、焦げ跡がある
-・扉が閉まらない状態を確認したい
-・両替機や機械の表示が読めない
-・お客様の説明だけでは状態が特定できない
+エラー番号、表示ランプ、操作パネル、ドラム内の量、毛布や布団の詰め込み具合、水漏れ、異物、破損、焦げ跡、扉が閉まらない状態、両替機や機械の表示など、見ないと判断できない時だけ。
 
 写真を求めないケース：
-・乾かない
-・料金を知りたい
-・使い方を知りたい
-・どの機械を使えばいいか
-・毛布を洗えるか
-・靴を洗えるか
-・何分乾燥すればいいか
-・温度設定
-・QR決済
-・両替方法
+乾かない、料金、使い方、どの機械を使うか、毛布、靴、乾燥時間、温度設定、QR決済、両替方法。
 
 乾かない相談：
 最初に写真を求めない。
-まず「それは困りましたね」と受け止める。
-次に、
-・何を乾燥したか
-・量は多くなかったか
-・何分乾燥したか
-・大型乾燥機を使ったか
-・毛布や厚手物か
-を短く確認する。
+「それは困りましたね」と受け止める。
+何を乾燥したか、量、乾燥時間、大型乾燥機か、毛布や厚手物かを短く確認する。
 
 操作方法：
-山本製作所の洗濯乾燥機・水洗機、IPSOの水洗機・乾燥機は基本的に、
-お金を入れる
-↓
-コースを選ぶ
-↓
-もう一度コースボタンを押す
-↓
-スタート
-の流れで案内する。
+山本製作所の洗濯乾燥機・水洗機、IPSOの水洗機・乾燥機は、
+お金を入れる → コースを選ぶ → もう一度コースボタンを押す → スタート。
 
 温度設定：
-西本町店では、
-低温 55度
-中温 65度
-高温 75度
-として案内する。
+西本町店では、低温55度、中温65度、高温75度。
 
 緊急対応：
-異音、焦げ臭い、発煙、水漏れ、危険を感じる場合は、
-無理に使わせない。
-利用を止めるよう案内する。
-安全を優先し、第一警備保障へ連絡する案内をする。
-
-写真解析結果を受け取った時：
-・まず写真に写っている事実だけを短く言う
-・ランドリー機器と関係ない写真なら「ランドリー機械は確認できません。何を確認したいか教えてください」と聞く
-・エラー番号が読めない時は「もう少し近くで撮っていただけますか」と案内する
-・ドラム内や洗濯物量が見える時だけ、量が多そうか、厚手物かを慎重に伝える
-・買い替え、修理、交換の提案は禁止
-・最後は次の確認質問で終える
+異音、焦げ臭い、発煙、水漏れ、危険を感じる場合は、利用を止めるよう案内し、安全優先で第一警備保障へ連絡する案内をする。
 
 回答は原則3文以内。
 `;
@@ -167,6 +110,8 @@ ChatGPTではありません。
     }
 
     dataChannelRef.current = null;
+    greetingDoneRef.current = false;
+    lastTranscriptRef.current = "";
 
     if (localVideoRef.current) localVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
@@ -180,6 +125,111 @@ ChatGPTではありません。
     if (error.name === "OverconstrainedError") return "カメラ条件が合いません";
     if (error.message) return error.message;
     return "接続に失敗しました";
+  }
+
+  function isValidCustomerText(text) {
+    const clean = String(text || "").trim();
+
+    if (clean.length < 2) return false;
+
+    const ignoreWords = [
+      "え",
+      "あ",
+      "ん",
+      "はい",
+      "うん",
+      "あー",
+      "えー",
+      "はいはい",
+      "ありがとう",
+      "よろしく"
+    ];
+
+    if (ignoreWords.includes(clean)) return false;
+
+    return true;
+  }
+
+  function sendExactGreeting(dc) {
+    if (!dc || dc.readyState !== "open" || greetingDoneRef.current) return;
+
+    greetingDoneRef.current = true;
+
+    dc.send(JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["audio"],
+        instructions:
+          "次の一文だけをそのまま音声で話してください。余計な言葉は絶対に足さないでください。「AIスタッフです。ご用件をお伺いします。」"
+      }
+    }));
+  }
+
+  function sendResponseForCustomerText(dc, text) {
+    if (!dc || dc.readyState !== "open") return;
+
+    dc.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text
+          }
+        ]
+      }
+    }));
+
+    dc.send(JSON.stringify({
+      type: "response.create",
+      response: {
+        modalities: ["audio"],
+        instructions:
+          "西本町店の現場スタッフとして、3文以内で短くやさしく返答してください。まず会話で問診し、必要な時以外は写真を求めないでください。"
+      }
+    }));
+  }
+
+  function handleRealtimeEvent(event) {
+    const dc = dataChannelRef.current;
+    if (!dc || dc.readyState !== "open") return;
+
+    let data = null;
+
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      return;
+    }
+
+    const transcript =
+      data?.transcript ||
+      data?.item?.content?.[0]?.transcript ||
+      data?.item?.content?.[0]?.text ||
+      "";
+
+    const isTranscriptDone =
+      data?.type === "conversation.item.input_audio_transcription.completed" ||
+      data?.type === "input_audio_transcription.completed" ||
+      data?.type === "response.audio_transcript.done";
+
+    if (!isTranscriptDone) return;
+
+    const clean = String(transcript || "").trim();
+
+    if (!isValidCustomerText(clean)) {
+      setStatus("待機中");
+      return;
+    }
+
+    if (clean === lastTranscriptRef.current) return;
+
+    lastTranscriptRef.current = clean;
+    setStatus("返答中");
+
+    sendResponseForCustomerText(dc, clean);
   }
 
   async function getAudioStream() {
@@ -345,40 +395,39 @@ ChatGPTではありません。
       const dc = pc.createDataChannel("oai-events");
       dataChannelRef.current = dc;
 
+      dc.onmessage = handleRealtimeEvent;
+
       dc.onopen = () => {
         dc.send(JSON.stringify({
           type: "session.update",
           session: {
+            type: "realtime",
             instructions: STAFF_INSTRUCTIONS,
-            voice: "shimmer",
-            turn_detection: {
-              type: "server_vad",
-              threshold: 0.98,
-              prefix_padding_ms: 500,
-              silence_duration_ms: 2000,
-              create_response: true,
-              interrupt_response: true
+            audio: {
+              input: {
+                transcription: {
+                  model: "whisper-1"
+                },
+                turn_detection: {
+                  type: "server_vad",
+                  threshold: 0.99,
+                  prefix_padding_ms: 700,
+                  silence_duration_ms: 2600,
+                  create_response: false,
+                  interrupt_response: true
+                }
+              },
+              output: {
+                voice: "marin"
+              }
             }
           }
         }));
 
-        dc.send(JSON.stringify({
-          type: "conversation.item.create",
-          item: {
-            type: "message",
-            role: "user",
-            content: [
-              {
-                type: "input_text",
-                text:
-                  "第一声を1回だけ話してください。文言は必ず「AIスタッフです。ご用件をお伺いします。」だけにしてください。その後は、お客様の明確な発話があるまで何も話さず待機してください。"
-              }
-            ]
-          }
-        }));
-
-        dc.send(JSON.stringify({ type: "response.create" }));
-        setStatus("接続完了");
+        setTimeout(() => {
+          sendExactGreeting(dc);
+          setStatus("接続完了");
+        }, 300);
       };
 
       dc.onerror = (error) => {
@@ -484,7 +533,13 @@ ChatGPTではありません。
           }
         }));
 
-        dc.send(JSON.stringify({ type: "response.create" }));
+        dc.send(JSON.stringify({
+          type: "response.create",
+          response: {
+            modalities: ["audio"],
+            instructions: "3文以内で短く案内してください。"
+          }
+        }));
       } else {
         setStatus("写真を確認しました。AI接続後に案内できます");
       }
