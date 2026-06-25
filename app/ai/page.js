@@ -24,6 +24,12 @@ ChatGPTではありません。説明ロボットでもありません。
 女性スタッフのように親しみやすく、短く、やさしく、落ち着いて話してください。
 高齢のお客様にも分かる言葉で話してください。
 
+重要：店舗情報：
+このお店は無人店舗です。
+スタッフは常駐していません。
+「スタッフを呼びます」「スタッフが参ります」「スタッフが常駐しています」は絶対に言わない。
+緊急時や困りごとが解決しない場合は、店内に掲示している緊急連絡先へお電話くださいと案内する。
+
 最重要：
 最初から写真やカメラを求めない。
 まず会話で問診する。
@@ -58,7 +64,7 @@ ChatGPTではありません。説明ロボットでもありません。
 西本町店では、低温55度、中温65度、高温75度。
 
 緊急対応：
-異音、焦げ臭い、発煙、水漏れ、危険を感じる場合は、利用を止めるよう案内し、安全優先で第一警備保障へ連絡する案内をする。
+異音、焦げ臭い、発煙、水漏れ、危険を感じる場合は、利用を止めるよう案内し、店内掲示の緊急連絡先へお電話くださいと案内する。
 
 回答は原則3文以内。
 `;
@@ -115,7 +121,6 @@ ChatGPTではありません。説明ロボットでもありません。
     return "接続に失敗しました";
   }
 
-  // ① speakLocalGreeting削除 → OpenAI側に挨拶させる
   function sendOpenAIGreeting(dc) {
     if (greetingDoneRef.current) return;
     greetingDoneRef.current = true;
@@ -142,7 +147,7 @@ ChatGPTではありません。説明ロボットでもありません。
         output_modalities: ["audio"],
         audio: {
           output: {
-            voice: "nova"
+            voice: "shimmer"
           }
         },
         instructions: "1〜2文で自然に挨拶してください。「承知しました」「では行きます」などの業務的な言葉は使わないでください。"
@@ -150,7 +155,6 @@ ChatGPTではありません。説明ロボットでもありません。
     }));
   }
 
-  // ② 雑音フィルタ強化
   function isValidCustomerText(text) {
     const clean = String(text || "")
       .replace(/[。、．，,！？!?]/g, "")
@@ -158,7 +162,6 @@ ChatGPTではありません。説明ロボットでもありません。
 
     if (!clean) return false;
 
-    // 短い相槌・挨拶・AIの発話は除外
     const ignoreExactWords = [
       "あ", "え", "ん", "うん", "はい", "はいはい",
       "あー", "えー", "おー", "んー",
@@ -173,13 +176,11 @@ ChatGPTではありません。説明ロボットでもありません。
 
     if (ignoreExactWords.includes(clean.toLowerCase())) return false;
 
-    // 部分一致でも除外（AI自身の発話が誤認識された場合）
     const ignorePartialWords = [
       "aiスタッフ", "西本町店", "ご用件", "お伺いします", "いらっしゃいませ"
     ];
     if (ignorePartialWords.some((word) => clean.includes(word))) return false;
 
-    // 強意図ワードは文字数に関係なく通過
     const strongIntentWords = [
       "乾かない", "乾燥", "エラー", "故障", "止まった", "動かない",
       "料金", "使い方", "両替", "返金", "水漏れ", "焦げ", "臭い", "煙",
@@ -190,7 +191,6 @@ ChatGPTではありません。説明ロボットでもありません。
 
     if (strongIntentWords.some((word) => clean.includes(word))) return true;
 
-    // 文字数閾値を12文字に引き上げ
     if (clean.length >= 12) return true;
 
     return false;
@@ -219,7 +219,7 @@ ChatGPTではありません。説明ロボットでもありません。
         output_modalities: ["audio"],
         audio: {
           output: {
-            voice: "nova"  // ③ nova統一
+            voice: "shimmer"
           }
         },
         instructions:
@@ -432,6 +432,9 @@ ChatGPTではありません。説明ロボットでもありません。
       dc.onmessage = handleRealtimeEvent;
 
       dc.onopen = () => {
+        // 挨拶2連続バグ対策：onopen冒頭でガード
+        if (greetingDoneRef.current) return;
+
         dc.send(JSON.stringify({
           type: "session.update",
           session: {
@@ -445,21 +448,20 @@ ChatGPTではありません。説明ロボットでもありません。
                 },
                 turn_detection: {
                   type: "server_vad",
-                  threshold: 0.995,          // ② 0.99 → 0.995
-                  prefix_padding_ms: 1000,   // ② 700 → 1000
-                  silence_duration_ms: 4000, // ② 3000 → 4000
+                  threshold: 0.995,
+                  prefix_padding_ms: 1000,
+                  silence_duration_ms: 4000,
                   create_response: false,
                   interrupt_response: false
                 }
               },
               output: {
-                voice: "nova"  // ③ nova統一
+                voice: "shimmer"
               }
             }
           }
         }));
 
-        // ① OpenAI側に挨拶させる（500ms待って安定してから）
         setTimeout(() => {
           sendOpenAIGreeting(dc);
           setStatus("接続完了");
@@ -575,7 +577,7 @@ ChatGPTではありません。説明ロボットでもありません。
             output_modalities: ["audio"],
             audio: {
               output: {
-                voice: "nova"  // ③ nova統一
+                voice: "shimmer"
               }
             },
             instructions: "3文以内で短く案内してください。"
