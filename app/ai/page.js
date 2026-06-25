@@ -20,17 +20,14 @@ export default function AIPage() {
 あなたはコインランドリー西本町店の現場スタッフです。
 ChatGPTではありません。説明ロボットでもありません。
 
-最重要目的：
-お客様の不安を減らし、現場スタッフのように実務解決すること。
-
 基本人格：
 女性スタッフのように親しみやすく、短く、やさしく、落ち着いて話してください。
 高齢のお客様にも分かる言葉で話してください。
 
-第一声：
-接続直後の第一声は「AIスタッフです。ご用件をお伺いします。」だけ。
-それ以外の言葉を足さない。
-第一声の後は、お客様の明確な発話があるまで待つ。
+最重要：
+最初から写真やカメラを求めない。
+まず会話で問診する。
+見ないと判断できない時だけ写真をお願いする。
 
 無音・雑音：
 無音、雑音、物音、機械音、咳、衣擦れ、周囲の会話には反応しない。
@@ -42,20 +39,11 @@ ChatGPTではありません。説明ロボットでもありません。
 3. 追加質問する
 4. 会話で解決できるなら写真は求めない
 5. 見ないと判断できない時だけ写真をお願いする
-6. 写真後も、見える事実、可能性、次の確認を短く案内する
 
-絶対禁止：
-最初から写真やカメラを求めない。
-何でも「写真を撮ってください」と言わない。
-見えていないのに「確認しました」「見えました」と言わない。
+禁止：
 買い替え、修理、交換を勝手に勧めない。
+見えていないのに「確認しました」「見えました」と言わない。
 長文、専門家口調、説教、議論、クレームへの反論は禁止。
-
-写真をお願いしてよいケース：
-エラー番号、表示ランプ、操作パネル、ドラム内の量、毛布や布団の詰め込み具合、水漏れ、異物、破損、焦げ跡、扉が閉まらない状態、両替機や機械の表示など、見ないと判断できない時だけ。
-
-写真を求めないケース：
-乾かない、料金、使い方、どの機械を使うか、毛布、靴、乾燥時間、温度設定、QR決済、両替方法。
 
 乾かない相談：
 最初に写真を求めない。
@@ -127,42 +115,85 @@ ChatGPTではありません。説明ロボットでもありません。
     return "接続に失敗しました";
   }
 
-  function isValidCustomerText(text) {
-    const clean = String(text || "").trim();
-
-    if (clean.length < 2) return false;
-
-    const ignoreWords = [
-      "え",
-      "あ",
-      "ん",
-      "はい",
-      "うん",
-      "あー",
-      "えー",
-      "はいはい",
-      "ありがとう",
-      "よろしく"
-    ];
-
-    if (ignoreWords.includes(clean)) return false;
-
-    return true;
-  }
-
-  function sendExactGreeting(dc) {
-    if (!dc || dc.readyState !== "open" || greetingDoneRef.current) return;
-
+  // ① speakLocalGreeting削除 → OpenAI側に挨拶させる
+  function sendOpenAIGreeting(dc) {
+    if (greetingDoneRef.current) return;
     greetingDoneRef.current = true;
+
+    if (!dc || dc.readyState !== "open") return;
+
+    dc.send(JSON.stringify({
+      type: "conversation.item.create",
+      item: {
+        type: "message",
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: "お客様が来店しました。西本町店のスタッフとして、短く自然に挨拶してください。"
+          }
+        ]
+      }
+    }));
 
     dc.send(JSON.stringify({
       type: "response.create",
       response: {
-        modalities: ["audio"],
-        instructions:
-          "次の一文だけをそのまま音声で話してください。余計な言葉は絶対に足さないでください。「AIスタッフです。ご用件をお伺いします。」"
+        output_modalities: ["audio"],
+        audio: {
+          output: {
+            voice: "nova"
+          }
+        },
+        instructions: "1〜2文で自然に挨拶してください。「承知しました」「では行きます」などの業務的な言葉は使わないでください。"
       }
     }));
+  }
+
+  // ② 雑音フィルタ強化
+  function isValidCustomerText(text) {
+    const clean = String(text || "")
+      .replace(/[。、．，,！？!?]/g, "")
+      .trim();
+
+    if (!clean) return false;
+
+    // 短い相槌・挨拶・AIの発話は除外
+    const ignoreExactWords = [
+      "あ", "え", "ん", "うん", "はい", "はいはい",
+      "あー", "えー", "おー", "んー",
+      "ありがとう", "ありがとうございます",
+      "よろしく", "よろしくお願いします",
+      "承知しました", "では行きます",
+      "aiスタッフです", "ご用件をお伺いします",
+      "こんにちは", "いらっしゃいませ",
+      "なにかお困りですか", "お気軽にどうぞ",
+      "はい何でしょう", "お待ちしております"
+    ];
+
+    if (ignoreExactWords.includes(clean.toLowerCase())) return false;
+
+    // 部分一致でも除外（AI自身の発話が誤認識された場合）
+    const ignorePartialWords = [
+      "aiスタッフ", "西本町店", "ご用件", "お伺いします", "いらっしゃいませ"
+    ];
+    if (ignorePartialWords.some((word) => clean.includes(word))) return false;
+
+    // 強意図ワードは文字数に関係なく通過
+    const strongIntentWords = [
+      "乾かない", "乾燥", "エラー", "故障", "止まった", "動かない",
+      "料金", "使い方", "両替", "返金", "水漏れ", "焦げ", "臭い", "煙",
+      "ドア", "開かない", "閉まらない", "毛布", "布団", "靴", "スニーカー",
+      "カード", "qr", "QR", "支払い", "温度", "洗濯", "洗剤",
+      "困", "わから", "教えて", "どうすれば", "どうやって", "できない", "助けて"
+    ];
+
+    if (strongIntentWords.some((word) => clean.includes(word))) return true;
+
+    // 文字数閾値を12文字に引き上げ
+    if (clean.length >= 12) return true;
+
+    return false;
   }
 
   function sendResponseForCustomerText(dc, text) {
@@ -185,9 +216,14 @@ ChatGPTではありません。説明ロボットでもありません。
     dc.send(JSON.stringify({
       type: "response.create",
       response: {
-        modalities: ["audio"],
+        output_modalities: ["audio"],
+        audio: {
+          output: {
+            voice: "nova"  // ③ nova統一
+          }
+        },
         instructions:
-          "西本町店の現場スタッフとして、3文以内で短くやさしく返答してください。まず会話で問診し、必要な時以外は写真を求めないでください。"
+          "西本町店の女性現場スタッフとして、3文以内で短くやさしく返答してください。まず会話で問診し、必要な時以外は写真を求めないでください。"
       }
     }));
   }
@@ -204,18 +240,17 @@ ChatGPTではありません。説明ロボットでもありません。
       return;
     }
 
+    const isUserTranscriptDone =
+      data?.type === "conversation.item.input_audio_transcription.completed" ||
+      data?.type === "input_audio_transcription.completed";
+
+    if (!isUserTranscriptDone) return;
+
     const transcript =
       data?.transcript ||
       data?.item?.content?.[0]?.transcript ||
       data?.item?.content?.[0]?.text ||
       "";
-
-    const isTranscriptDone =
-      data?.type === "conversation.item.input_audio_transcription.completed" ||
-      data?.type === "input_audio_transcription.completed" ||
-      data?.type === "response.audio_transcript.done";
-
-    if (!isTranscriptDone) return;
 
     const clean = String(transcript || "").trim();
 
@@ -394,7 +429,6 @@ ChatGPTではありません。説明ロボットでもありません。
 
       const dc = pc.createDataChannel("oai-events");
       dataChannelRef.current = dc;
-
       dc.onmessage = handleRealtimeEvent;
 
       dc.onopen = () => {
@@ -403,6 +437,7 @@ ChatGPTではありません。説明ロボットでもありません。
           session: {
             type: "realtime",
             instructions: STAFF_INSTRUCTIONS,
+            output_modalities: ["audio"],
             audio: {
               input: {
                 transcription: {
@@ -410,24 +445,25 @@ ChatGPTではありません。説明ロボットでもありません。
                 },
                 turn_detection: {
                   type: "server_vad",
-                  threshold: 0.99,
-                  prefix_padding_ms: 700,
-                  silence_duration_ms: 2600,
+                  threshold: 0.995,          // ② 0.99 → 0.995
+                  prefix_padding_ms: 1000,   // ② 700 → 1000
+                  silence_duration_ms: 4000, // ② 3000 → 4000
                   create_response: false,
-                  interrupt_response: true
+                  interrupt_response: false
                 }
               },
               output: {
-                voice: "marin"
+                voice: "nova"  // ③ nova統一
               }
             }
           }
         }));
 
+        // ① OpenAI側に挨拶させる（500ms待って安定してから）
         setTimeout(() => {
-          sendExactGreeting(dc);
+          sendOpenAIGreeting(dc);
           setStatus("接続完了");
-        }, 300);
+        }, 500);
       };
 
       dc.onerror = (error) => {
@@ -536,7 +572,12 @@ ChatGPTではありません。説明ロボットでもありません。
         dc.send(JSON.stringify({
           type: "response.create",
           response: {
-            modalities: ["audio"],
+            output_modalities: ["audio"],
+            audio: {
+              output: {
+                voice: "nova"  // ③ nova統一
+              }
+            },
             instructions: "3文以内で短く案内してください。"
           }
         }));
