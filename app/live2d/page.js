@@ -8,9 +8,13 @@ export default function Live2DPage() {
       try {
         await loadScript("https://cubism.live2d.com/sdk-web/cubismcore/live2dcubismcore.min.js");
         await loadScript("https://cdn.jsdelivr.net/npm/pixi.js@6.5.10/dist/browser/pixi.min.js");
-        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/index.min.js");
+        await loadScript("https://cdn.jsdelivr.net/npm/pixi-live2d-display@0.4.0/dist/cubism4.min.js");
 
         const PIXI = window.PIXI;
+
+        if (!PIXI?.live2d?.Live2DModel) {
+          throw new Error("Live2DModelが読み込まれていません");
+        }
 
         const app = new PIXI.Application({
           view: document.getElementById("live2d-canvas"),
