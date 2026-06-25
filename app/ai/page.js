@@ -6,6 +6,7 @@ export default function AIPage() {
   const [status, setStatus] = useState("待機中");
   const [started, setStarted] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
+  const [visionResult, setVisionResult] = useState("");
 
   const localVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -15,27 +16,12 @@ export default function AIPage() {
 
   function isBackCameraLabel(label) {
     const text = String(label || "").toLowerCase();
-
-    return (
-      text.includes("back") ||
-      text.includes("rear") ||
-      text.includes("environment") ||
-      text.includes("facing back") ||
-      text.includes("背面") ||
-      text.includes("アウト")
-    );
+    return text.includes("back") || text.includes("rear") || text.includes("environment") || text.includes("facing back") || text.includes("背面") || text.includes("アウト");
   }
 
   function isFrontCameraLabel(label) {
     const text = String(label || "").toLowerCase();
-
-    return (
-      text.includes("front") ||
-      text.includes("user") ||
-      text.includes("facing front") ||
-      text.includes("前面") ||
-      text.includes("イン")
-    );
+    return text.includes("front") || text.includes("user") || text.includes("facing front") || text.includes("前面") || text.includes("イン");
   }
 
   function stopAll() {
@@ -90,7 +76,6 @@ export default function AIPage() {
       });
     } catch (firstCameraError) {
       console.warn("Environment camera fallback:", firstCameraError);
-
       return await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: true
@@ -126,7 +111,6 @@ export default function AIPage() {
       });
 
       currentCameraStream.getTracks().forEach((track) => track.stop());
-
       return backCameraStream;
     } catch (error) {
       console.warn("Back camera selection skipped:", error);
@@ -309,21 +293,48 @@ export default function AIPage() {
     const imageDataUrl = canvas.toDataURL("image/jpeg", 0.85);
 
     setCapturedImage(imageDataUrl);
+    setVisionResult("");
     setStatus("写真を確認してください");
   }
 
   function retakePhoto() {
     setCapturedImage(null);
+    setVisionResult("");
     setStatus("もう一度撮影できます");
   }
 
-  function sendPhotoPlaceholder() {
+  async function sendPhotoToVision() {
     if (!capturedImage) {
       setStatus("送信する写真がありません");
       return;
     }
 
-    setStatus("写真を受け取りました。解析機能は次に接続します");
+    try {
+      setStatus("写真を解析中です");
+      setVisionResult("");
+
+      const response = await fetch("/api/vision", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          image: capturedImage
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data?.error || "画像解析に失敗しました");
+      }
+
+      setVisionResult(data?.result || "画像を確認しました");
+      setStatus("写真を確認しました");
+    } catch (error) {
+      console.error(error);
+      setStatus(`画像解析失敗: ${error.message || "不明なエラー"}`);
+    }
   }
 
   return (
@@ -356,6 +367,12 @@ export default function AIPage() {
         </button>
 
         <div className="status">{status}</div>
+
+        {visionResult && (
+          <div className="visionResult">
+            {visionResult}
+          </div>
+        )}
       </div>
 
       <div className="cameraArea">
@@ -388,7 +405,7 @@ export default function AIPage() {
                 撮り直す
               </button>
 
-              <button className="sendPhotoButton" onClick={sendPhotoPlaceholder}>
+              <button className="sendPhotoButton" onClick={sendPhotoToVision}>
                 写真を送る
               </button>
             </div>
