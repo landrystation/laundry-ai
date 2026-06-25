@@ -20,55 +20,62 @@ export default function AIPage() {
 あなたはコインランドリー西本町店の現場スタッフです。
 ChatGPTではありません。説明ロボットでもありません。
 
-絶対ルール：
+# 言語・発音
 必ず日本語だけで話してください。英語や他の言語は一切使わないでください。
+日本語ネイティブの自然な発音とイントネーションで話してください。
+外国語なまりや帰国子女のような発音にならないようにしてください。
 
-基本人格：
+# ペーシング
+返答はすばやく始めてください。
+話すスピードは自然な会話のテンポで、もたつかないようにしてください。
+考え込む間を作らないでください。
+
+# 基本人格
 女性スタッフのように親しみやすく、短く、やさしく、落ち着いて話してください。
 高齢のお客様にも分かる言葉で話してください。
 いらっしゃいませ、ごゆっくり、ゆっくり選んでください、などの物販店の接客言葉は使わない。
 
-重要：店舗情報：
+# 店舗情報
 このお店は無人店舗です。
 スタッフは常駐していません。
 「スタッフを呼びます」「スタッフが参ります」「スタッフが常駐しています」は絶対に言わない。
 「スタッフを呼んでほしい」と言われたら「こちらからスタッフを呼ぶことはできません。困ったときは店内に掲示している緊急連絡先へお電話ください」と案内する。
 緊急時や困りごとが解決しない場合も、店内に掲示している緊急連絡先へお電話くださいと案内する。
 
-最重要：
+# 最重要
 最初から写真やカメラを求めない。
 まず会話で問診する。
 見ないと判断できない時だけ写真をお願いする。
 
-無音・雑音：
+# 無音・雑音
 無音、雑音、物音、機械音、咳、衣擦れ、周囲の会話には反応しない。
 内容が不明瞭なら勝手に推測して話さない。
 
-基本フロー：
+# 基本フロー
 1. まず共感する
 2. 会話で問診する
 3. 追加質問する
 4. 会話で解決できるなら写真は求めない
 5. 見ないと判断できない時だけ写真をお願いする
 
-禁止：
+# 禁止
 買い替え、修理、交換を勝手に勧めない。
 見えていないのに「確認しました」「見えました」と言わない。
 長文、専門家口調、説教、議論、クレームへの反論は禁止。
 
-乾かない相談：
+# 乾かない相談
 最初に写真を求めない。
 「それは困りましたね」と受け止める。
 何を乾燥したか、量、乾燥時間、大型乾燥機か、毛布や厚手物かを短く確認する。
 
-操作方法：
+# 操作方法
 山本製作所の洗濯乾燥機・水洗機、IPSOの水洗機・乾燥機は、
 お金を入れる → コースを選ぶ → もう一度コースボタンを押す → スタート。
 
-温度設定：
+# 温度設定
 西本町店では、低温55度、中温65度、高温75度。
 
-緊急対応：
+# 緊急対応
 異音、焦げ臭い、発煙、水漏れ、危険を感じる場合は、利用を止めるよう案内し、店内掲示の緊急連絡先へお電話くださいと案内する。
 
 回答は原則3文以内。
@@ -132,7 +139,6 @@ ChatGPTではありません。説明ロボットでもありません。
 
     if (!dc || dc.readyState !== "open") return;
 
-    // 挨拶は固定文を読ませる。AI自由生成させない。
     dc.send(JSON.stringify({
       type: "conversation.item.create",
       item: {
@@ -156,79 +162,7 @@ ChatGPTではありません。説明ロボットでもありません。
     }));
   }
 
-  function isValidCustomerText(text) {
-    const clean = String(text || "")
-      .replace(/[。、．，,！？!?]/g, "")
-      .trim();
-
-    if (!clean) return false;
-
-    const ignoreExactWords = [
-      "あ", "え", "ん", "うん", "はい", "はいはい",
-      "あー", "えー", "おー", "んー",
-      "ありがとう", "ありがとうございます",
-      "よろしく", "よろしくお願いします",
-      "承知しました", "では行きます",
-      "aiスタッフです", "ご用件をお伺いします",
-      "こんにちは", "いらっしゃいませ",
-      "なにかお困りですか", "お気軽にどうぞ",
-      "はい何でしょう", "お待ちしております"
-    ];
-
-    if (ignoreExactWords.includes(clean.toLowerCase())) return false;
-
-    const ignorePartialWords = [
-      "aiスタッフ", "西本町店", "ご用件", "お伺いします", "いらっしゃいませ"
-    ];
-    if (ignorePartialWords.some((word) => clean.includes(word))) return false;
-
-    const strongIntentWords = [
-      "乾かない", "乾燥", "エラー", "故障", "止まった", "動かない",
-      "料金", "使い方", "両替", "返金", "水漏れ", "焦げ", "臭い", "煙",
-      "ドア", "開かない", "閉まらない", "毛布", "布団", "靴", "スニーカー",
-      "カード", "qr", "QR", "支払い", "温度", "洗濯", "洗剤",
-      "困", "わから", "教えて", "どうすれば", "どうやって", "できない", "助けて",
-      "呼んで", "スタッフ", "人", "誰か"
-    ];
-
-    if (strongIntentWords.some((word) => clean.includes(word))) return true;
-
-    if (clean.length >= 12) return true;
-
-    return false;
-  }
-
-  function sendResponseForCustomerText(dc, text) {
-    if (!dc || dc.readyState !== "open") return;
-
-    dc.send(JSON.stringify({
-      type: "conversation.item.create",
-      item: {
-        type: "message",
-        role: "user",
-        content: [
-          {
-            type: "input_text",
-            text
-          }
-        ]
-      }
-    }));
-
-    dc.send(JSON.stringify({
-      type: "response.create",
-      response: {
-        output_modalities: ["audio"],
-        instructions:
-          "必ず日本語で話してください。西本町店の女性現場スタッフとして、3文以内で短くやさしく返答してください。まず会話で問診し、必要な時以外は写真を求めないでください。"
-      }
-    }));
-  }
-
   function handleRealtimeEvent(event) {
-    const dc = dataChannelRef.current;
-    if (!dc || dc.readyState !== "open") return;
-
     let data = null;
 
     try {
@@ -237,31 +171,14 @@ ChatGPTではありません。説明ロボットでもありません。
       return;
     }
 
-    const isUserTranscriptDone =
-      data?.type === "conversation.item.input_audio_transcription.completed" ||
-      data?.type === "input_audio_transcription.completed";
-
-    if (!isUserTranscriptDone) return;
-
-    const transcript =
-      data?.transcript ||
-      data?.item?.content?.[0]?.transcript ||
-      data?.item?.content?.[0]?.text ||
-      "";
-
-    const clean = String(transcript || "").trim();
-
-    if (!isValidCustomerText(clean)) {
-      setStatus("待機中");
-      return;
+    // create_response: true にしたのでhandleRealtimeEventは状態表示のみ
+    if (data?.type === "response.audio.delta") {
+      setStatus("返答中");
     }
 
-    if (clean === lastTranscriptRef.current) return;
-
-    lastTranscriptRef.current = clean;
-    setStatus("返答中");
-
-    sendResponseForCustomerText(dc, clean);
+    if (data?.type === "response.done") {
+      setStatus("接続完了");
+    }
   }
 
   async function getAudioStream() {
@@ -444,11 +361,11 @@ ChatGPTではありません。説明ロボットでもありません。
                 },
                 turn_detection: {
                   type: "server_vad",
-                  threshold: 0.995,
-                  prefix_padding_ms: 1000,
-                  silence_duration_ms: 4000,
-                  create_response: false,
-                  interrupt_response: false
+                  threshold: 0.98,
+                  prefix_padding_ms: 500,
+                  silence_duration_ms: 1500,
+                  create_response: true,      // 即座に返答
+                  interrupt_response: true
                 }
               },
               output: {
